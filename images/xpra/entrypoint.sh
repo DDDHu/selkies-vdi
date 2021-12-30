@@ -25,20 +25,27 @@ fi
 [[ -c /dev/nvidiactl ]] && (cd /tmp && sudo LD_LIBRARY_PATH=${LD_LIBRARY_PATH} DISPLAY=${DISPLAY} vulkaninfo >/dev/null || true)
 
 # Write html5 client default settings
+# NOTE: the default-settings file used to be in /usr/share/xpra/www, with v4.5.2, its not in /etc/xpra/html5-client and symlinked.
+export DEFAULT_SETTINGS_FILE="/etc/xpra/html5-client/default-settings.txt"
+export DEFAULT_SETTINGS_LINK="/usr/share/xpra/www/default-settings.txt"
+sudo mkdir -p $(dirname ${DEFAULT_SETTINGS_FILE})
+sudo rm -f ${DEFAULT_SETTINGS_FILE}
+sudo touch ${DEFAULT_SETTINGS_FILE}
+sudo ln -sf ${DEFAULT_SETTINGS_FILE} ${DEFAULT_SETTINGS_LINK}
+
 echo "INFO: writing HTML5 default-settings.txt"
 if [[ -n "${XPRA_HTML5_DEFAULT_SETTINGS}" ]]; then
-  sudo rm -f /usr/share/xpra/www/default-settings.txt.*
-  echo "${XPRA_HTML5_DEFAULT_SETTINGS}" | sudo tee /usr/share/xpra/www/default-settings.txt
+  echo "${XPRA_HTML5_DEFAULT_SETTINGS}" | sudo tee ${DEFAULT_SETTINGS_FILE}
 fi
 
 # Copy clipboard direction so that it can be passed to the html5 client.
-echo "clipboard_direction = ${XPRA_CLIPBOARD_DIRECTION:-"both"}" | sudo tee -a /usr/share/xpra/www/default-settings.txt
+echo "clipboard_direction = ${XPRA_CLIPBOARD_DIRECTION:-"both"}" | sudo tee -a ${DEFAULT_SETTINGS_FILE}
 
 # Write variables prefixed with XPRA_HTML5_SETTING_ to default-settings file
 for v in "${!XPRA_HTML5_SETTING_@}"; do
   setting_name=${v/XPRA_HTML5_SETTING_/}
   setting_value=$(eval echo \$$v)
-  echo "$setting_name = $setting_value" | sudo tee -a /usr/share/xpra/www/default-settings.txt
+  echo "$setting_name = $setting_value" | sudo tee -a ${DEFAULT_SETTINGS_FILE}
 done
 
 # Add TCP module to Xpra pulseaudio server command to share pulse server with sidecars.
@@ -47,18 +54,17 @@ if [[ "${XPRA_ENABLE_AUDIO:-false}" == "true" ]]; then
     /etc/xpra/conf.d/60_server.conf
   XPRA_ARGS="${XPRA_ARGS} --sound-source=pulsesrc --speaker-codec=opus+mka"
 
-  echo "sound = true" | sudo tee -a /usr/share/xpra/www/default-settings.txt
-  echo "audio_codec = opus" | sudo tee -a /usr/share/xpra/www/default-settings.txt
+  echo "sound = true" | sudo tee -a ${DEFAULT_SETTINGS_FILE}
+  echo "audio_codec = opus" | sudo tee -a ${DEFAULT_SETTINGS_FILE}
   export GST_DEBUG=${GST_DEBUG:-"*:2"}
 else
   XPRA_ARGS="${XPRA_ARGS} --no-pulseaudio"
-  echo "sound = false" | sudo tee -a /usr/share/xpra/www/default-settings.txt
+  echo "sound = false" | sudo tee -a ${DEFAULT_SETTINGS_FILE}
 fi
 
 # Make default-settings.txt entries unique
-uniq /usr/share/xpra/www/default-settings.txt > /tmp/default-settings.txt && \
-  sudo mv /tmp/default-settings.txt /usr/share/xpra/www/default-settings.txt
-sudo rm -f /usr/share/xpra/www/default-settings.txt.gz
+uniq ${DEFAULT_SETTINGS_FILE} > /tmp/default-settings.txt && \
+  sudo mv /tmp/default-settings.txt ${DEFAULT_SETTINGS_FILE}
 
 if [[ -n "${XPRA_CONF}" ]]; then
   echo "INFO: echo writing xpra conf to /etc/xpra/conf.d/99_appconfig.conf"
